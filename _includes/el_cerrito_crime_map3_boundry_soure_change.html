@@ -685,7 +685,7 @@ function stepForward() {
       // During playback, start trails end by exactly one period
       state.timeIndex = Math.max(0, state.timeIndexEnd - 1);
     } else {
-      state.timeIndex = Math.min(state.timeIndex, state.timeIndexEnd);
+      state.timeIndex = Math.min(state.timeIndex + 1 , state.timeIndexEnd);
     }
     refreshMap();
   } else {
