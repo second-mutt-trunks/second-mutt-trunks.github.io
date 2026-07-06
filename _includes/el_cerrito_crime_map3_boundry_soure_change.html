@@ -1,0 +1,920 @@
+---
+---
+<html lang="en">
+<head>
+  <!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-38G2ELY40Y"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-38G2ELY40Y');
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TESTING-El Cerrito Crime Map-TESTING</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+<script src="{{ '/assets/js/welcome-modal.js' | relative_url }}"></script>
+
+<style>
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 99999;
+}
+
+:root {
+  --bg:         #0b0d12;
+  --panel:      #111420;
+  --border:     #1e2335;
+  --border2:    #2a3050;
+  --text:       #c8cedf;
+  --text-dim:   #5a6180;
+  --text-muted: #3a4060;
+  --accent:     #4f8ef7;
+  --mono: 'IBM Plex Mono', monospace;
+  --sans: 'IBM Plex Sans', sans-serif;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; overflow: hidden; font-family: var(--sans); background: var(--bg); color: var(--text); }
+
+/* ---- layout ---- */
+#app {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  grid-template-rows: 50px 1fr 90px;
+  height: 100vh;
+}
+
+/* ---- header ---- */
+#header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 18px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  z-index: 1000;
+}
+.pulse-dot {
+  width: 8px; height: 8px;
+  background: #30e060;
+  border-radius: 50%;
+  box-shadow: 0 0 6px #30e060;
+  animation: pulse 2s infinite;
+  flex-shrink: 0;
+}
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+.logo { font-family:var(--mono); font-size:11px; font-weight:600; letter-spacing:.18em; color:var(--accent); text-transform:uppercase; }
+.title { font-size:13px; font-weight:600; letter-spacing:.04em; }
+.sep { flex:1; }
+.stat-pill {
+  font-family:var(--mono); font-size:10px; color:var(--text-dim);
+  padding:3px 10px; border:1px solid var(--border2); border-radius:3px; white-space:nowrap;
+}
+.stat-pill span { color:var(--text); font-weight:600; }
+
+/* ---- sidebar ---- */
+#sidebar {
+  grid-column: 1;
+  grid-row: 2;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.sidebar-section { padding:12px 14px; border-bottom:1px solid var(--border); }
+.section-label { font-family:var(--mono); font-size:9px; letter-spacing:.2em; text-transform:uppercase; color:var(--text-muted); margin-bottom:9px; }
+
+.toggle-row { display:flex; gap:6px; }
+.toggle-btn {
+  flex:1; padding:5px 0;
+  font-family:var(--mono); font-size:10px; letter-spacing:.07em;
+  border:1px solid var(--border2); border-radius:3px;
+  background:transparent; color:var(--text-dim);
+  cursor:pointer; transition:all .15s; text-transform:uppercase;
+}
+.toggle-btn.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+.toggle-btn:hover:not(.active) { border-color:var(--text-dim); color:var(--text); }
+
+#cat-list { flex:1; overflow-y:auto; padding:8px 14px; }
+#cat-list::-webkit-scrollbar { width:3px; }
+#cat-list::-webkit-scrollbar-thumb { background:var(--border2); border-radius:2px; }
+
+.cat-item {
+  display:flex; align-items:center; gap:8px; padding:4px 0;
+  cursor:pointer; user-select:none; transition:opacity .1s;
+}
+.cat-item:hover { opacity:.82; }
+.cat-item.inactive { opacity:.28; }
+.cat-dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+.cat-name { flex:1; font-size:11.5px; }
+.cat-count { font-family:var(--mono); font-size:10px; color:var(--text-dim); }
+
+.filter-controls { display:flex; gap:6px; padding:0 14px 8px; }
+.tiny-btn {
+  font-family:var(--mono); font-size:9px; letter-spacing:.12em; text-transform:uppercase;
+  background:transparent; border:1px solid var(--border2); color:var(--text-dim);
+  border-radius:3px; padding:3px 9px; cursor:pointer; transition:all .15s;
+}
+.tiny-btn:hover { border-color:var(--text-dim); color:var(--text); }
+
+#visible-count { padding:8px 14px 0; font-family:var(--mono); font-size:10px; color:var(--text-dim); }
+#visible-count strong { color:var(--text); }
+
+/* ---- map ---- */
+#map { grid-column:2; grid-row:2; width:100%; height:100%; }
+
+/* ---- time controls ---- */
+#time-bar {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 10px 18px 10px;
+  gap: 8px;
+  z-index: 1000;
+}
+
+.time-top {
+  display: flex;
+  justify-content: center;
+  margin-left: 282px;
+  width: 1620px;
+  box-sizing: border-box;
+  gap: 14px;
+}
+
+.gran-group {
+  margin-left: 0px;
+}
+/* transport buttons */
+.transport { display:flex; align-items:center; gap:4px; }
+.t-btn {
+  width:30px; height:30px;
+  display:flex; align-items:center; justify-content:center;
+  background:transparent; border:1px solid var(--border2);
+  border-radius:4px; color:var(--text-dim); cursor:pointer;
+  transition:all .15s; flex-shrink:0;
+  font-size:13px;
+}
+.t-btn:hover { border-color:var(--text); color:var(--text); }
+.t-btn.play-btn {
+  width:36px; height:36px; font-size:15px;
+  border-color:var(--accent); color:var(--accent);
+}
+.t-btn.play-btn:hover { background:var(--accent); color:#fff; }
+.t-btn.play-btn.playing { background:var(--accent); color:#fff; }
+
+/* period label */
+.period-label {
+  font-family:var(--mono); font-size:13px; font-weight:600;
+  color:var(--text); min-width:130px; text-align:center;
+}
+.period-sub {
+  font-family:var(--mono); font-size:9px; color:var(--text-dim);
+  letter-spacing:.1em; text-align:center;
+}
+
+/* speed */
+.speed-group { display:flex; align-items:center; gap:6px; margin-left:4px; }
+.speed-label { font-family:var(--mono); font-size:9px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.1em; }
+.speed-btn {
+  font-family:var(--mono); font-size:9px;
+  padding:3px 7px; border:1px solid var(--border2);
+  border-radius:3px; background:transparent; color:var(--text-dim);
+  cursor:pointer; transition:all .15s;
+}
+.speed-btn.active { border-color:var(--accent); color:var(--accent); }
+.speed-btn:hover:not(.active) { color:var(--text); }
+
+/* slider row */
+.time-slider-row { display:flex; align-items:center; gap:10px; }
+.slider-bound { font-family:var(--mono); font-size:9px; color:var(--text-muted); white-space:nowrap; }
+
+.dual-range-wrap {
+  flex:1; position:relative; height:20px; display:flex; align-items:center;
+}
+.dual-range-wrap input[type=range] {
+  position:absolute; left:0; right:0; width:100%;
+  -webkit-appearance:none; appearance:none;
+  height:4px; background:transparent;
+  pointer-events:none; outline:none;
+}
+.dual-range-wrap input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance:none; appearance:none;
+  width:14px; height:14px;
+  background:var(--accent); border-radius:50%; cursor:pointer;
+  pointer-events:all;
+  box-shadow:0 0 6px rgba(79,142,247,.5);
+}
+.dual-range-wrap input[type=range]::-moz-range-thumb {
+  width:14px; height:14px;
+  background:var(--accent); border-radius:50%; cursor:pointer; border:none;
+  pointer-events:all;
+}
+#range-track {
+  position:absolute; left:0; right:0; height:4px;
+  background:var(--border2); border-radius:2px;
+  pointer-events:none;
+}
+#range-fill {
+  position:absolute; height:4px; border-radius:2px;
+  background:var(--accent); pointer-events:none;
+}
+
+/* ---- popup ---- */
+.leaflet-popup-content-wrapper {
+  background:var(--panel)!important; border:1px solid var(--border2)!important;
+  border-radius:4px!important; box-shadow:0 4px 20px rgba(0,0,0,.6)!important;
+  color:var(--text)!important; font-family:var(--sans)!important;
+  min-width:240px; max-width:320px;
+}
+.leaflet-popup-tip { background:var(--panel)!important; }
+.leaflet-popup-close-button { color:var(--text-dim)!important; }
+.popup-crime-type { font-size:13px; font-weight:700; margin-bottom:6px; padding-bottom:6px; border-bottom:1px solid var(--border); }
+.popup-field { display:flex; gap:8px; font-size:11px; margin-bottom:4px; }
+.popup-label { font-family:var(--mono); font-size:9px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.1em; white-space:nowrap; padding-top:1px; }
+.popup-value { color:var(--text); line-height:1.4; }
+.popup-desc { margin-top:8px; padding-top:8px; border-top:1px solid var(--border); font-size:11px; color:#a0a8c0; line-height:1.5; }
+
+/* cluster */
+.marker-cluster-small  { background:rgba(79,142,247,.18); }
+.marker-cluster-medium { background:rgba(240,160,40,.18); }
+.marker-cluster-large  { background:rgba(224,90,90,.18); }
+.marker-cluster-small  div { background:rgba(79,142,247,.7); }
+.marker-cluster-medium div { background:rgba(240,160,40,.7); }
+.marker-cluster-large  div { background:rgba(224,90,90,.7); }
+.marker-cluster div span { color:#fff; font-family:var(--mono); font-size:11px; }
+
+.leaflet-control-attribution { background:rgba(11,13,18,.85)!important; color:var(--text-muted)!important; }
+.leaflet-control-attribution a { color:var(--text-dim)!important; }
+.leaflet-control-zoom a { background:var(--panel)!important; color:var(--text)!important; border-color:var(--border)!important; }
+.leaflet-control-zoom a:hover { background:var(--border2)!important; }
+
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.modal-window {
+    width: 70%;
+    max-width: 1000px;
+
+    padding: 1.5rem;
+
+    background: white;
+    border-radius: 8px;
+
+    overflow-y: auto;
+
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    color: #333333;
+    background: white;
+    padding: 20px;
+}
+
+.modal-overlay[hidden] {
+    display: none;
+}
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <header id="header">
+    <div class="pulse-dot"></div>
+    <div class="logo">ECPD</div>
+    <div class="title">TESTING-Crime Incident Map-TESTING</div>
+    <div class="sep"></div>
+    <div class="stat-pill">DATASET <span id="hdr-range">--</span></div>
+    <div class="stat-pill">PERIOD <span id="hdr-shown">--</span></div>
+    <div class="stat-pill">SHOWN <span id="hdr-count">--</span></div>
+  </header>
+
+  <aside id="sidebar">
+    <div class="sidebar-section">
+      <div class="section-label">Map Layer</div>
+      <div class="toggle-row">
+        <button class="toggle-btn active" id="btn-markers" onclick="setLayer('markers')">Markers</button>
+        <button class="toggle-btn" id="btn-heat" onclick="setLayer('heat')">Heat Map</button>
+      </div>
+    </div>
+
+    <div class="sidebar-section" style="padding-bottom:6px">
+      <div class="section-label">Crime Categories</div>
+    </div>
+
+    <div id="visible-count">&nbsp;</div>
+    <div class="filter-controls">
+      <button class="tiny-btn" onclick="selectAll()">All</button>
+      <button class="tiny-btn" onclick="selectNone()">None</button>
+    </div>
+
+    <div id="cat-list"></div>
+  </aside>
+
+  <div id="map"></div>
+
+  <!-- Time Controls -->
+  <div id="time-bar">
+    <div class="time-top">
+      <!-- Transport -->
+      <div class="transport">
+        <button class="t-btn" id="btn-first"   onclick="gotoFirst()"   title="First">&#x23EE;</button>
+        <button class="t-btn" id="btn-prev"    onclick="stepBack()"    title="Previous">&#x23EA;</button>
+        <button class="t-btn play-btn" id="btn-play" onclick="togglePlay()" title="Play / Pause">&#x23F5;</button>
+        <button class="t-btn" id="btn-next"    onclick="stepForward()" title="Next">&#x23E9;</button>
+        <button class="t-btn" id="btn-last"    onclick="gotoLast()"    title="Last">&#x23ED;</button>
+      </div>
+
+      <!-- Period label -->
+      <div style="display:flex;flex-direction:column;align-items:center;min-width:140px">
+        <div class="period-label" id="period-label">--</div>
+        <div class="period-sub" id="period-sub">SELECT PERIOD</div>
+      </div>
+
+      <!-- Speed -->
+      <div class="speed-group">
+        <span class="speed-label">Speed</span>
+        <button class="speed-btn" data-speed="1200" onclick="setSpeed(1200,this)">0.5x</button>
+        <button class="speed-btn active" data-speed="600" onclick="setSpeed(600,this)">1x</button>
+        <button class="speed-btn" data-speed="300" onclick="setSpeed(300,this)">2x</button>
+        <button class="speed-btn" data-speed="120" onclick="setSpeed(120,this)">5x</button>
+      </div>
+
+      <!-- Granularity -->
+      <div class="gran-group">
+        <span class="speed-label">Step</span>
+        <button class="speed-btn" id="gran-day"   onclick="setGranularity('day')"   >Day</button>
+        <button class="speed-btn" id="gran-week"  onclick="setGranularity('week')"  >Week</button>
+        <button class="speed-btn active" id="gran-month" onclick="setGranularity('month')">Month</button>
+      </div>
+    </div>
+
+    <!-- Scrubber -->
+    <div class="time-slider-row">
+      <span class="slider-bound" id="slider-min">--</span>
+      <div class="dual-range-wrap">
+        <div id="range-track"></div>
+        <div id="range-fill"></div>
+        <input type="range" id="time-slider-start" min="0" value="0">
+        <input type="range" id="time-slider-end" min="0" value="0">
+      </div>
+      <span class="slider-bound" id="slider-max">--</span>
+    </div>
+  </div>
+
+</div><!-- #app -->
+
+<script>
+// ============================================================
+// DATA
+// ============================================================
+  const CRIME_DATA = {{ site.data.crime_data | jsonify }};
+  const BY_DAY = {{ site.data.by_day | jsonify }};
+  const BY_MONTH = {{ site.data.by_month | jsonify }};
+  const BY_WEEK = {{ site.data.by_week | jsonify }};
+
+
+// ============================================================
+// El Cerrito city boundary loaded from _data/ec_boundary.json (approximate polygon from official boundary data)
+// ============================================================
+  const EC_BOUNDARY_GEOJSON = {{ site.data.ec_boundary | jsonify }};
+// ============================================================
+// CATEGORIES
+// ============================================================
+const CATEGORIES = [
+  { id:'assault',   label:'Assault / Battery',  color:'#eb1c26', glyph:'\ue546',  // fa-person-robbery
+    kw:['assault','battery','criminal threat','brandishing','elder abuse','child abuse','animal cruelty'] },
+  { id:'domestic',  label:'Domestic Violence',  color:'#eb1c26', glyph:'\ue510',  // fa-house-shield
+    kw:['domestic violence','domestic battery','restraining order','court order','prevent person from calling'] },
+  { id:'sexual',    label:'Sex Offenses',       color:'#eb1c26', glyph:'\ue53b',  // fa-person-burst
+    kw:['sexual','indecent','lewd','intimate images','prowling','peeping'] },
+  { id:'weapons',   label:'Weapons',            color:'#ec5824', glyph:'\ue19b',  // fa-gun
+    kw:['firearm','weapon','gun','ammunition','stun gun','brass knuckles','shooting',
+        'burglary tools','pepper spray','tear gas','discharge'] },
+  { id:'arson',     label:'Arson / Fire',       color:'#f7941d', glyph:'\uf06d',  // fa-fire
+    kw:['arson','burning','burn'] }, 
+  { id:'bomb',      label:'Bomb Threat',        color:'#f7941d', glyph:'\uf1e2',  //fa-bomb
+    kw:['bomb threat','false bomb'] },
+  { id:'robbery',   label:'Robbery',            color:'#f7941d', glyph:'\ue536',  // fa-person-robbery
+    kw:['robbery','strong arm','strongarm','carjacking','home invasion'] },
+  { id:'theft',     label:'Theft',              color:'#89c73c', glyph:'\uf07a',  // fa-shopping-cart
+    kw:['shoplifting','shoplift','organized retail','retail theft','grand theft','petty theft',
+        'theft from','theft of','mail theft','package theft','theft by false','theft with',
+        'attempted theft','attempted petty','attempted grand','attempt grand','attempt petty',
+        'misappropriate','embezzlement','extortion','defraud','theft'] },
+  { id:'burglary',  label:'Burglary',           color:'#89c73c', glyph:'\ue536',  // fa-person-through-window
+    kw:['burglary','burglery','trespass'] },
+  { id:'vehicle',   label:'Vehicle Crimes',     color:'#89c73c', glyph:'\uf1b9',  // fa-car
+    kw:['stolen vehicle','vehicle theft','auto theft','recovered stolen','vehicle tampering',
+        'tampering with','tamper with','hit and run','evading','felony evading','impound',
+        'license plate','stolen plate'] },
+  { id:'dui',       label:'DUI / Alcohol',      color:'#89c73c', glyph:'\uf0fc',  // fa-beer
+    kw:['dui','driving under the influence','drunk driving','public intoxication',
+        'drunk in public','open container','intoxicated','alcohol'] },
+  { id:'warrant',   label:'Warrants / Arrest',  color:'#15a79c', glyph:'\ue4f8',  // fa-handcuffs
+    kw:['warrant','probation','parole','loitering','obstruct','resisting','resist',
+        'evade police','false identification','false id','false info','arrest'] },
+  { id:'drugs',     label:'Drugs',              color:'#15a79c', glyph:'\uf484',  // fa-pills
+    kw:['drug','narcotic','controlled substance','paraphernalia','possession of'] },
+  { id:'vandalism', label:'Vandalism',          color:'#7d3e97', glyph:'\uf5bd',  // fa-spray-can
+    kw:['vandalism','graffiti','damage'] },
+  { id:'fraud',     label:'Fraud / Identity',   color:'#7d3e97', glyph:'\uf2c2',  // fa-id-card
+    kw:['fraud','identity theft','forgery','skimming','skimmer','counterfeit',
+        'false pretense','identifying information','access card','account data','impersonating'] },
+  { id:'other',     label:'Other',              color:'#7d3e97', glyph:'\uf06a', kw:[] },  // fa-circle-exclamation
+];
+
+function getCatId(crimeType) {
+  const lower = (crimeType || '').toLowerCase();
+  const primary = lower.split(/\s*\/\s*|\s*,\s*|\s+and\s+/)[0].trim();
+  for (const cat of CATEGORIES) {
+    if (cat.id === 'other') continue;
+    if (cat.kw.some(k => primary.includes(k))) return cat.id;
+  }
+  for (const cat of CATEGORIES) {
+    if (cat.id === 'other') continue;
+    if (cat.kw.some(k => lower.includes(k))) return cat.id;
+  }
+  return 'other';
+}
+
+// Enrich records with catId
+const records = CRIME_DATA.map(r => ({ ...r, catId: getCatId(r.CrimeType) }));
+
+// ============================================================
+// STATE
+// ============================================================
+const state = {
+  activeLayer:  'markers',
+  activeCats:   new Set(CATEGORIES.map(c => c.id)),
+  granularity:  'month',   // 'day' | 'week' | 'month'
+  timeIndex:    0,
+  timeIndexEnd: 0,         // end of selected range (inclusive)
+  playing:      false,
+  speed:        600,
+  playTimer:    null,
+};
+
+// Current time-bucket arrays: [ [key, [recordIndices]], ... ]
+let timeBuckets = BY_MONTH;
+
+// ============================================================
+// MAP
+// ============================================================
+const map = L.map('map', { center:[37.9188,-122.3063], zoom:14 });
+
+L.tileLayer('http://tile-{s}.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
+  subdomains: ['a','b','c'],
+  attribution:'&copy; <a href="http://www.osm.org" target="_blank">OpenStreetMap</a> contributors',
+  maxZoom:17,
+}).addTo(map);
+
+  
+L.geoJSON(EC_BOUNDARY_GEOJSON, {
+  style: {
+    color: '#ff3333',
+    weight: 2.5,
+    opacity: 0.9,
+    fill: false,
+  }
+}).addTo(map);
+
+const clusterGroup = L.markerClusterGroup({ chunkedLoading:false, maxClusterRadius:40 , spiderfyDistanceMultiplier:1.75});
+map.addLayer(clusterGroup);
+let heatLayer = null;
+
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function makeMarker(r) {
+  const cat   = CATEGORIES.find(c => c.id === r.catId);
+  const color = cat ? cat.color : '#505070';
+  const glyph = cat ? cat.glyph : '\uf059';
+
+  const pinHtml = `
+    <svg width="35" height="45" viewBox="0 0 28 36" xmlns="http://www.w3.org/2000/svg"
+          style="filter:drop-shadow(0 2px 3px rgba(0,0,0,0.55));overflow:visible;">
+      <path d="M14 0 C6.268 0 0 6.268 0 14 C0 22 14 36 14 36 C14 36 28 22 28 14 C28 6.268 21.732 0 14 0 Z"
+            fill="${color}" fill-opacity="0.92"/>
+      <circle cx="14" cy="14" r="11.5" fill="rgba(0,0,0,0.42)"/>
+      <text x="14" y="20" text-anchor="middle"
+            font-family="'Font Awesome 6 Free'" font-weight="900"
+            font-size="14" fill="#ffffff">${glyph}</text>
+    </svg>`;
+
+  const icon = L.divIcon({
+    html: pinHtml,
+    className: '',
+    iconSize: [35, 45],
+    iconAnchor: [17.5, 45],
+    popupAnchor: [0, -45],
+  });
+
+  const m = L.marker([r.latitude, r.longitude], { icon });
+  const businessLine = r.Business ? `<div class="popup-field"><span class="popup-label">Business</span><span class="popup-value">${escHtml(r.Business)}</span></div>` : '';
+  const timeLine = r.Time ? `<div class="popup-field"><span class="popup-label">Time</span><span class="popup-value">${escHtml(r.Time)}</span></div>` : '';
+  m.bindPopup(`
+    <div class="popup-crime-type" style="color:${color}">${escHtml(r.CrimeType)}</div>
+    <div class="popup-field"><span class="popup-label">Date</span><span class="popup-value">${r.date}</span></div>
+    ${timeLine}
+    ${businessLine}
+    <div class="popup-field"><span class="popup-label">Location</span><span class="popup-value">${escHtml(r.Location)}</span></div>
+    <div class="popup-desc">${escHtml(r.Description)}</div>
+    <div class="popup-field"><span class="popup-label">Blotter URL</span><span class="popup-value"><a href="${r.url}" target="_blank">${r.url}</a></span></div>
+  `, { maxWidth: 320 });
+  return m;
+}
+
+function refreshMap() {
+  const startBucket = timeBuckets[state.timeIndex];
+  if (!startBucket) return;
+
+  // Clamp end index and ensure it's >= start
+  state.timeIndexEnd = Math.max(state.timeIndex,
+    Math.min(timeBuckets.length - 1, state.timeIndexEnd));
+
+  // Collect all indices across the selected range of buckets
+  let allIndices = [];
+  for (let i = state.timeIndex; i <= state.timeIndexEnd; i++) {
+    allIndices = allIndices.concat(timeBuckets[i][1]);
+  }
+
+  // Filter by active categories
+  const visible = allIndices
+    .map(i => records[i])
+    .filter(r => state.activeCats.has(r.catId));
+
+  // Period label: show range if start != end
+  const startLabel = formatPeriodLabel(timeBuckets[state.timeIndex][0]);
+  const endLabel   = formatPeriodLabel(timeBuckets[state.timeIndexEnd][0]);
+  const periodLabel = state.timeIndex === state.timeIndexEnd
+    ? startLabel
+    : startLabel + ' \u2013 ' + endLabel;
+
+  document.getElementById('period-label').textContent = periodLabel;
+  document.getElementById('period-sub').textContent =
+    visible.length.toLocaleString() + ' incident' + (visible.length !== 1 ? 's' : '');
+  document.getElementById('hdr-shown').textContent = periodLabel;
+  document.getElementById('hdr-count').textContent = visible.length.toLocaleString();
+  document.getElementById('visible-count').innerHTML =
+    '<strong>' + visible.length.toLocaleString() + '</strong> incidents this period';
+
+  // Dual sliders
+  const maxIdx = timeBuckets.length - 1;
+  const sliderStart = document.getElementById('time-slider-start');
+  const sliderEnd   = document.getElementById('time-slider-end');
+  sliderStart.max   = maxIdx;
+  sliderEnd.max     = maxIdx;
+
+  // Only force the slider values if they are out of sync with the state
+  // This prevents the handles from snapping back while you drag them past each other
+  const val1 = parseInt(sliderStart.value, 10);
+  const val2 = parseInt(sliderEnd.value, 10);
+  if (Math.min(val1, val2) !== state.timeIndex || Math.max(val1, val2) !== state.timeIndexEnd) {
+    sliderStart.value = state.timeIndex;
+    sliderEnd.value   = state.timeIndexEnd;
+  }
+
+  updateRangeFill();
+
+  if (state.activeLayer === 'markers') {
+    if (heatLayer) { map.removeLayer(heatLayer); heatLayer = null; }
+    clusterGroup.clearLayers();
+    if (!map.hasLayer(clusterGroup)) map.addLayer(clusterGroup);
+    clusterGroup.addLayers(visible.map(makeMarker));
+  } else {
+    map.removeLayer(clusterGroup);
+    if (heatLayer) map.removeLayer(heatLayer);
+    const pts = visible.map(r => [r.latitude, r.longitude, 1]);
+    heatLayer = L.heatLayer(pts, {
+      radius:17, blur:15, minOpacity:0.35, maxZoom:17,
+      gradient:{ 0.2:'#4f8ef7', 0.4:'#9060c0', 0.6:'#f0c040', 0.8:'#e05a5a', 1.0:'#ff4010' },
+    }).addTo(map);
+  }
+}
+
+function formatPeriodLabel(key) {
+  if (state.granularity === 'month') {
+    const [y, m] = key.split('-');
+    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return monthNames[parseInt(m,10)-1] + ' ' + y;
+  }
+  if (state.granularity === 'week') {
+    // key like "2022-W06"
+    return key.replace('-', ' ');
+  }
+  return key; // day: YYYY-MM-DD
+}
+
+// ============================================================
+// TIME CONTROLS
+// ============================================================
+function setGranularity(gran) {
+  state.granularity = gran;
+  timeBuckets = gran === 'day' ? BY_DAY : gran === 'week' ? BY_WEEK : BY_MONTH;
+  state.timeIndex    = 0;
+  state.timeIndexEnd = 0;
+
+  document.getElementById('gran-day').classList.toggle('active',   gran==='day');
+  document.getElementById('gran-week').classList.toggle('active',  gran==='week');
+  document.getElementById('gran-month').classList.toggle('active', gran==='month');
+
+  const maxIdx = timeBuckets.length - 1;
+  const sliderStart = document.getElementById('time-slider-start');
+  const sliderEnd   = document.getElementById('time-slider-end');
+  sliderStart.max   = maxIdx;
+  sliderEnd.max     = maxIdx;
+  sliderStart.value = 0;
+  sliderEnd.value   = 0;
+
+  document.getElementById('slider-min').textContent = formatPeriodLabel(timeBuckets[0][0]);
+  document.getElementById('slider-max').textContent = formatPeriodLabel(timeBuckets[maxIdx][0]);
+
+  updateRangeFill();
+  refreshMap();
+}
+
+function gotoIndex(i) {
+  const clamped = Math.max(0, Math.min(timeBuckets.length - 1, i));
+  // During playback, advance the end handle only; keep start at beginning of range
+  if (state.playing) {
+    state.timeIndexEnd = clamped;
+  } else {
+    // Step controls move start; end follows if it would go behind start
+    state.timeIndex    = clamped;
+    state.timeIndexEnd = Math.max(clamped, state.timeIndexEnd);
+  }
+  refreshMap();
+}
+
+function stepForward() {
+  if (state.timeIndexEnd < timeBuckets.length - 1) {
+    state.timeIndexEnd = state.timeIndexEnd + 1;
+    if (state.playing) {
+      // During playback, start trails end by exactly one period
+      state.timeIndex = Math.max(0, state.timeIndexEnd - 1);
+    } else {
+      state.timeIndex = Math.min(state.timeIndex, state.timeIndexEnd);
+    }
+    refreshMap();
+  } else {
+    pausePlay();
+  }
+}
+
+
+function stepBack()  {
+  state.timeIndex    = Math.max(0, state.timeIndex - 1);
+  state.timeIndexEnd = Math.max(state.timeIndex, state.timeIndexEnd - 1);
+  refreshMap();
+}
+function gotoFirst() {
+  state.timeIndex = 0;
+  state.timeIndexEnd = 0;
+  refreshMap();
+}
+function gotoLast()  {
+  const last = timeBuckets.length - 1;
+  state.timeIndex = last;
+  state.timeIndexEnd = last;
+  refreshMap();
+}
+
+function togglePlay() {
+  state.playing ? pausePlay() : startPlay();
+}
+
+function startPlay() {
+  if (state.timeIndexEnd >= timeBuckets.length - 1) {
+    state.timeIndex    = 1;
+    state.timeIndexEnd = 0;
+    refreshMap();
+  }
+  state.playing = true;
+  document.getElementById('btn-play').innerHTML = '&#x23F8;';
+  document.getElementById('btn-play').classList.add('playing');
+  scheduleNext();
+}
+
+function pausePlay() {
+  state.playing = false;
+  document.getElementById('btn-play').innerHTML = '&#x23F5;';
+  document.getElementById('btn-play').classList.remove('playing');
+  if (state.playTimer) { clearTimeout(state.playTimer); state.playTimer = null; }
+}
+
+function scheduleNext() {
+  if (!state.playing) return;
+  state.playTimer = setTimeout(() => {
+    stepForward();
+    if (state.playing && state.timeIndexEnd < timeBuckets.length - 1) scheduleNext();
+  }, state.speed);
+}
+
+function setSpeed(ms, btn) {
+  state.speed = ms;
+  document.querySelectorAll('.speed-btn[data-speed]').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+// Unified slider drag logic
+function handleSliderInput() {
+  pausePlay();
+  const sliderStart = document.getElementById('time-slider-start');
+  const sliderEnd   = document.getElementById('time-slider-end');
+
+  const val1 = parseInt(sliderStart.value, 10);
+  const val2 = parseInt(sliderEnd.value, 10);
+
+  // Allow crossing by dynamically assigning the lower value to start and higher to end
+  state.timeIndex = Math.min(val1, val2);
+  state.timeIndexEnd = Math.max(val1, val2);
+  
+  updateRangeFill();
+  refreshMap();
+}
+
+// Dynamic Z-Index prioritization when thumbs overlap
+function handleOverlap(e) {
+  // 1. Grab the elements using your specific IDs
+  const sliderStart = document.getElementById('time-slider-start');
+  const sliderEnd = document.getElementById('time-slider-end');
+  if (!sliderStart || !sliderEnd) return;
+  
+  // 2. Get the bounding box of the container to track absolute coordinates
+  const rect = sliderStart.getBoundingClientRect();
+  const clickX = e.clientX - rect.left;
+  const width = rect.width;
+  
+  // 3. Convert cursor position to a numerical slider value
+  const min = parseFloat(sliderStart.min) || 0;
+  const max = parseFloat(sliderStart.max) || 100;
+  const hoverValue = min + (clickX / width) * (max - min);
+
+  // 4. Measure the distance from cursor to both thumb values
+  const distToStart = Math.abs(hoverValue - sliderStart.value);
+  const distToEnd = Math.abs(hoverValue - sliderEnd.value);
+
+  // 5. Put the closer thumb on top
+  if (distToStart < distToEnd) {
+    sliderStart.style.zIndex = "3";
+    sliderEnd.style.zIndex = "2";
+  } else {
+    sliderStart.style.zIndex = "2";
+    sliderEnd.style.zIndex = "3";
+  }
+}
+
+// Bind the event listeners
+const domSliderStart = document.getElementById('time-slider-start');
+const domSliderEnd = document.getElementById('time-slider-end');
+const container = document.querySelector('.slider-container'); 
+
+if (domSliderStart && domSliderEnd) {
+  domSliderStart.addEventListener('input', handleSliderInput);
+  domSliderEnd.addEventListener('input', handleSliderInput);
+  
+  // The line below binds directly to the div to detect mouse movements before you click [cite: 8, 9]
+  if (container) {
+    container.addEventListener('mousemove', handleOverlap);
+  }
+  
+  updateRangeFill();
+  refreshMap();
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    const modal = document.getElementById("welcome-modal");
+    const closeButton = document.getElementById("welcome-close");
+
+    modal.hidden = false;
+
+    closeButton.addEventListener("click", () => {
+        modal.hidden = true;
+    });
+});
+
+
+// Dual slider range fill visual update
+function updateRangeFill() {
+  const sliderStart = document.getElementById('time-slider-start');
+  const sliderEnd   = document.getElementById('time-slider-end');
+  const fill = document.getElementById('range-fill');
+  if (!sliderStart || !sliderEnd || !fill) return;
+  const max  = parseInt(sliderStart.max, 10) || 1;
+  const val1  = parseInt(sliderStart.value, 10);
+  const val2 = parseInt(sliderEnd.value, 10);
+  // Find true left and right slider positision
+  const low  = Math.min(val1, val2);
+  const high = Math.max(val1, val2);
+  // Fill gap
+  const pctLow  = (low  / max) * 100;
+  const pctHigh = (high / max) * 100;
+  fill.style.left  = pctLow + '%';
+  fill.style.width = (pctHigh - pctLow) + '%';
+}
+
+
+// ============================================================
+// LAYER TOGGLE
+// ============================================================
+function setLayer(layer) {
+  state.activeLayer = layer;
+  document.getElementById('btn-markers').classList.toggle('active', layer==='markers');
+  document.getElementById('btn-heat').classList.toggle('active',    layer==='heat');
+  refreshMap();
+}
+
+// ============================================================
+// CATEGORY SIDEBAR
+// ============================================================
+function buildSidebar() {
+  const counts = {};
+  for (const cat of CATEGORIES) counts[cat.id] = 0;
+  for (const r of records) counts[r.catId] = (counts[r.catId]||0) + 1;
+
+  const list = document.getElementById('cat-list');
+  list.innerHTML = '';
+  for (const cat of CATEGORIES) {
+    const el = document.createElement('div');
+    el.className = 'cat-item';
+    el.dataset.catId = cat.id;
+    el.innerHTML = `
+      <span class="cat-dot" style="background:${cat.color}"></span>
+      <span class="cat-name">${cat.label}</span>
+      <span class="cat-count">${(counts[cat.id]||0).toLocaleString()}</span>
+    `;
+    el.addEventListener('click', () => toggleCat(cat.id));
+    list.appendChild(el);
+  }
+}
+
+function updateCatUI() {
+  document.querySelectorAll('.cat-item').forEach(el => {
+    el.classList.toggle('inactive', !state.activeCats.has(el.dataset.catId));
+  });
+}
+
+function toggleCat(id) {
+  state.activeCats.has(id) ? state.activeCats.delete(id) : state.activeCats.add(id);
+  updateCatUI();
+  refreshMap();
+}
+
+function selectAll()  { CATEGORIES.forEach(c => state.activeCats.add(c.id));    updateCatUI(); refreshMap(); }
+function selectNone() { state.activeCats.clear(); updateCatUI(); refreshMap(); }
+
+// ============================================================
+// INIT
+// ============================================================
+const allDates = records.map(r => r.date).sort();
+document.getElementById('slider-min').textContent = formatPeriodLabel(BY_MONTH[0][0]);
+document.getElementById('slider-max').textContent = formatPeriodLabel(BY_MONTH[BY_MONTH.length-1][0]);
+
+const maxBucketIdx = BY_MONTH.length - 1;
+const sliderStart = document.getElementById('time-slider-start');
+const sliderEnd   = document.getElementById('time-slider-end');
+sliderStart.max   = maxBucketIdx;
+sliderEnd.max     = maxBucketIdx;
+sliderStart.value = 0;
+sliderEnd.value   = 0;
+state.timeIndexEnd = 0;
+updateRangeFill();
+
+buildSidebar();
+updateCatUI();
+refreshMap();
+</script>
+</body>
+</html>
